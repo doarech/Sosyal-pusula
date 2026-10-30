@@ -31,6 +31,11 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
     val allCheckIns: StateFlow<List<CheckInEntity>>
     val latestCheckIn: StateFlow<CheckInEntity?>
     val allTasks: StateFlow<List<DailyTaskEntity>>
+    val activeWeeklyPlan: StateFlow<com.example.data.local.WeeklyPlanEntity?>
+    val allWeeklyPlans: StateFlow<List<com.example.data.local.WeeklyPlanEntity>>
+
+    private val _latestReviewResult = MutableStateFlow<com.example.data.local.WeeklyReviewEntity?>(null)
+    val latestReviewResult: StateFlow<com.example.data.local.WeeklyReviewEntity?> = _latestReviewResult.asStateFlow()
 
     private val _selectedLogoId = MutableStateFlow(
         prefs.getInt(KEY_SELECTED_LOGO, 1)
@@ -96,9 +101,24 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
             emptyList()
         )
 
+        activeWeeklyPlan = repository.activeWeeklyPlan.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            null
+        )
+
+        allWeeklyPlans = repository.allWeeklyPlans.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
         viewModelScope.launch {
             try {
-                repository.seedInitialDataIfEmpty()
+                val demoDeleted = prefs.getBoolean("demo_data_deleted", false)
+                if (!demoDeleted) {
+                    repository.seedInitialDataIfEmpty()
+                }
                 // Stockpile fresh AI questions in background while user uses app
                 repository.prefetchQuestionsInBackground()
             } catch (e: Exception) {
@@ -109,13 +129,68 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
         refreshUsageStats()
     }
 
+    fun getWeeklyTasks(planId: Long) = repository.getWeeklyTasks(planId)
+
+    fun toggleWeeklyTask(taskId: Long, isCompleted: Boolean) {
+        viewModelScope.launch {
+            repository.toggleWeeklyTask(taskId, isCompleted)
+        }
+    }
+
+    fun saveWeeklyTaskReflection(taskId: Long, reflection: String) {
+        viewModelScope.launch {
+            repository.saveWeeklyTaskReflection(taskId, reflection)
+        }
+    }
+
+    fun submitWeeklyReview(
+        planId: Long,
+        emotionalRating: Int,
+        helpfulTasks: List<String>,
+        challenges: List<String>,
+        reasons: List<String>,
+        socialChangeLabel: String,
+        socialChangeNote: String,
+        nextGoal: String,
+        onSuccess: (com.example.data.local.WeeklyReviewEntity) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isAnalyzing.value = true
+            try {
+                val (review, _) = repository.submitWeeklyReview(
+                    planId = planId,
+                    emotionalRating = emotionalRating,
+                    helpfulTasks = helpfulTasks,
+                    challenges = challenges,
+                    reasons = reasons,
+                    socialChangeLabel = socialChangeLabel,
+                    socialChangeNote = socialChangeNote,
+                    nextGoal = nextGoal
+                )
+                _latestReviewResult.value = review
+                onSuccess(review)
+            } catch (e: Exception) {
+                _analysisError.value = e.localizedMessage ?: "Haftalık değerlendirme kaydedilirken bir hata oluştu."
+            } finally {
+                _isAnalyzing.value = false
+            }
+        }
+    }
+
+    fun deleteDemoData() {
+        viewModelScope.launch {
+            repository.deleteDemoData()
+            prefs.edit().putBoolean("demo_data_deleted", true).apply()
+        }
+    }
+
     fun refreshUsageStats() {
         val context = getApplication<Application>()
         val hasPerm = UsageStatsHelper.hasUsageStatsPermission(context)
         _hasUsagePermission.value = hasPerm
         if (hasPerm) {
             val hours = UsageStatsHelper.getWeeklyDailyAverageScreenHours(context)
-            _autoDetectedScreenHours.value = hours ?: 3.5f // Fallback to a realistic baseline if emulator has no app usage
+            _autoDetectedScreenHours.value = hours ?: 3.5f
         } else {
             _autoDetectedScreenHours.value = null
         }
@@ -146,7 +221,13 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun loadDynamicQuestions() {
+    /**
+     * Prevents duplicate/concurrent calls and enforces single management of AI questions.
+     */
+    fun loadDynamicQuestions(forceReload: Boolean = false) {
+        if (_isQuestionsLoading.value) return
+        if (!forceReload && _dynamicQuestions.value.isNotEmpty()) return
+
         viewModelScope.launch {
             _isQuestionsLoading.value = true
             _analysisError.value = null
@@ -161,6 +242,30 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun submitCheckInWithResponses(
+        responses: List<com.example.data.ai.QuestionResponse>,
+        userNotes: String,
+        onSuccess: (CheckInEntity) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isAnalyzing.value = true
+            _analysisError.value = null
+
+            refreshUsageStats()
+            val screenHours = _autoDetectedScreenHours.value ?: 4.0f
+
+            try {
+                val savedCheckIn = repository.saveCheckInWithAi(responses, screenHours, userNotes)
+                _recentAnalysisResult.value = savedCheckIn
+                onSuccess(savedCheckIn)
+            } catch (e: Exception) {
+                _analysisError.value = e.localizedMessage ?: "Yapay zeka analizi sırasında bir sorun oluştu."
+            } finally {
+                _isAnalyzing.value = false
+            }
+        }
+    }
+
     fun submitCheckIn(
         answers: List<Pair<String, String>>,
         userNotes: String,
@@ -170,7 +275,6 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
             _isAnalyzing.value = true
             _analysisError.value = null
 
-            // Determine screen hours directly from the device's usage stats
             refreshUsageStats()
             val screenHours = _autoDetectedScreenHours.value ?: 4.0f
 

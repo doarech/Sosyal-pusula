@@ -4,9 +4,16 @@ import android.util.Log
 import com.example.data.ai.AiAnalysisResult
 import com.example.data.ai.AiService
 import com.example.data.ai.DynamicQuestion
+import com.example.data.ai.GeneratedReviewSummary
+import com.example.data.ai.GeneratedWeeklyPlan
+import com.example.data.ai.GeneratedWeeklyTask
+import com.example.data.ai.QuestionResponse
 import com.example.data.local.CheckInEntity
 import com.example.data.local.CompassDao
 import com.example.data.local.DailyTaskEntity
+import com.example.data.local.WeeklyPlanEntity
+import com.example.data.local.WeeklyReviewEntity
+import com.example.data.local.WeeklyTaskEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -77,13 +84,18 @@ class CompassRepository(
         return questions
     }
 
+    val activeWeeklyPlan: Flow<WeeklyPlanEntity?> = dao.getActiveWeeklyPlan()
+    val allWeeklyPlans: Flow<List<WeeklyPlanEntity>> = dao.getAllWeeklyPlans()
+
+    fun getWeeklyTasks(planId: Long): Flow<List<WeeklyTaskEntity>> = dao.getTasksForPlan(planId)
+
     suspend fun saveCheckInWithAi(
-        answers: List<Pair<String, String>>,
+        responses: List<QuestionResponse>,
         screenHours: Float,
         userNotes: String
     ): CheckInEntity {
         val currentWeek = getCurrentWeekString()
-        val analysis = aiService.evaluateLonelinessAndGeneratePlan(answers, screenHours, userNotes)
+        val analysis = aiService.evaluateLonelinessAndGeneratePlan(responses, screenHours, userNotes)
 
         val checkIn = CheckInEntity(
             weekString = currentWeek,
@@ -93,7 +105,8 @@ class CompassRepository(
             aiSummary = analysis.summary,
             levelLabel = analysis.levelLabel,
             motivationQuote = analysis.motivationQuote,
-            motivationAuthor = analysis.motivationAuthor
+            motivationAuthor = analysis.motivationAuthor,
+            isDemo = false
         )
 
         val checkInId = dao.insertCheckIn(checkIn)
@@ -110,12 +123,156 @@ class CompassRepository(
         }
         dao.insertTasks(taskEntities)
 
+        // Generate / Update Active 7-Day Weekly Program for this week
+        try {
+            val generatedPlan = aiService.generateWeeklyPlan(analysis.score, userNotes)
+            val cal = Calendar.getInstance()
+            val startMs = cal.timeInMillis
+            cal.add(Calendar.DAY_OF_YEAR, 7)
+            val endMs = cal.timeInMillis
+
+            val planEntity = WeeklyPlanEntity(
+                weekString = currentWeek,
+                startDate = startMs,
+                endDate = endMs,
+                mainGoal = generatedPlan.mainGoal,
+                focusArea = generatedPlan.focusArea,
+                status = "ACTIVE",
+                isDemo = false
+            )
+            val planId = dao.insertWeeklyPlan(planEntity)
+
+            val weeklyTaskEntities = generatedPlan.tasks.map {
+                WeeklyTaskEntity(
+                    planId = planId,
+                    dayNumber = it.dayNumber,
+                    dayLabel = it.dayLabel,
+                    title = it.title,
+                    description = it.description,
+                    category = it.category,
+                    isCompleted = false
+                )
+            }
+            dao.insertWeeklyTasks(weeklyTaskEntities)
+        } catch (e: Exception) {
+            Log.w("CompassRepository", "Failed to generate weekly plan during check-in", e)
+        }
+
         // Refill question stockpile in background after completing a check-in
         CoroutineScope(Dispatchers.IO).launch {
             prefetchQuestionsInBackground()
         }
 
         return checkIn.copy(id = checkInId)
+    }
+
+    @JvmName("saveCheckInWithAnswers")
+    suspend fun saveCheckInWithAi(
+        answers: List<Pair<String, String>>,
+        screenHours: Float,
+        userNotes: String
+    ): CheckInEntity {
+        val adaptedResponses = answers.mapIndexed { idx, pair ->
+            QuestionResponse(
+                question = DynamicQuestion(id = idx + 1, text = pair.first, isPositive = true),
+                selectedOptionIndex = null,
+                answerText = pair.second,
+                customNote = ""
+            )
+        }
+        return saveCheckInWithAi(adaptedResponses, screenHours, userNotes)
+    }
+
+    suspend fun toggleWeeklyTask(taskId: Long, isCompleted: Boolean) {
+        val completedAt = if (isCompleted) System.currentTimeMillis() else null
+        dao.updateWeeklyTaskCompletion(taskId, isCompleted, completedAt)
+    }
+
+    suspend fun saveWeeklyTaskReflection(taskId: Long, reflection: String) {
+        val isCompleted = reflection.isNotBlank()
+        val completedAt = if (isCompleted) System.currentTimeMillis() else null
+        dao.updateWeeklyTaskReflection(taskId, reflection, isCompleted, completedAt)
+    }
+
+    suspend fun submitWeeklyReview(
+        planId: Long,
+        emotionalRating: Int,
+        helpfulTasks: List<String>,
+        challenges: List<String>,
+        reasons: List<String>,
+        socialChangeLabel: String,
+        socialChangeNote: String,
+        nextGoal: String
+    ): Pair<WeeklyReviewEntity, WeeklyPlanEntity> {
+        val currentPlan = dao.getWeeklyPlanById(planId)
+        val weekStr = currentPlan?.weekString ?: getCurrentWeekString()
+
+        val aiSummaryResult = aiService.evaluateWeeklyReview(
+            emotionalRating = emotionalRating,
+            helpfulTasks = helpfulTasks,
+            challenges = challenges,
+            reasons = reasons,
+            socialChange = socialChangeLabel,
+            nextGoal = nextGoal
+        )
+
+        val review = WeeklyReviewEntity(
+            planId = planId,
+            weekString = weekStr,
+            emotionalRating = emotionalRating,
+            helpfulTasksSummary = helpfulTasks.joinToString(" • "),
+            challengingTasksSummary = challenges.joinToString(" • "),
+            challengeReasons = reasons.joinToString(" • "),
+            socialChangeLabel = socialChangeLabel,
+            socialChangeNote = socialChangeNote,
+            nextWeekGoal = nextGoal,
+            aiReviewSummary = aiSummaryResult.summary + "\n\n" + aiSummaryResult.adviceForNextWeek,
+            isDemo = false
+        )
+        dao.insertWeeklyReview(review)
+
+        // Mark current plan as COMPLETED
+        dao.updateWeeklyPlanStatus(planId, "COMPLETED")
+
+        // Generate next week's plan seamlessly
+        val cal = Calendar.getInstance()
+        val startMs = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_YEAR, 7)
+        val endMs = cal.timeInMillis
+        val nextWeekCal = Calendar.getInstance().apply { add(Calendar.WEEK_OF_YEAR, 1) }
+        val nextWeekStr = "${nextWeekCal.get(Calendar.YEAR)}-W${nextWeekCal.get(Calendar.WEEK_OF_YEAR)}"
+
+        val newGeneratedPlan = aiService.generateWeeklyPlan(
+            score = 30,
+            userPreferences = nextGoal,
+            previousReview = "${aiSummaryResult.summary} Odak: $nextGoal"
+        )
+
+        val newPlanEntity = WeeklyPlanEntity(
+            weekString = nextWeekStr,
+            startDate = startMs,
+            endDate = endMs,
+            mainGoal = newGeneratedPlan.mainGoal,
+            focusArea = newGeneratedPlan.focusArea,
+            status = "ACTIVE",
+            isDemo = false
+        )
+        val newPlanId = dao.insertWeeklyPlan(newPlanEntity)
+
+        val newWeeklyTasks = newGeneratedPlan.tasks.map {
+            WeeklyTaskEntity(
+                planId = newPlanId,
+                dayNumber = it.dayNumber,
+                dayLabel = it.dayLabel,
+                title = it.title,
+                description = it.description,
+                category = it.category,
+                isCompleted = false
+            )
+        }
+        dao.insertWeeklyTasks(newWeeklyTasks)
+
+        return review to newPlanEntity.copy(id = newPlanId)
     }
 
     suspend fun toggleTaskCompletion(taskId: Long, isCompleted: Boolean) {
@@ -130,6 +287,12 @@ class CompassRepository(
     suspend fun deleteCheckIn(id: Long) {
         dao.deleteTasksForCheckIn(id)
         dao.deleteCheckIn(id)
+    }
+
+    suspend fun deleteDemoData() {
+        dao.deleteDemoCheckIns()
+        dao.deleteDemoWeeklyPlans()
+        dao.deleteDemoReviews()
     }
 
     suspend fun seedInitialDataIfEmpty() {
@@ -163,7 +326,8 @@ class CompassRepository(
                         else -> "Düşük Yalnızlık (İyi)"
                     },
                     motivationQuote = quotePair.first,
-                    motivationAuthor = quotePair.second
+                    motivationAuthor = quotePair.second,
+                    isDemo = true
                 )
                 val checkInId = dao.insertCheckIn(checkIn)
 
@@ -173,18 +337,102 @@ class CompassRepository(
                         title = "Bugün bir arkadaşına sesli mesaj gönder.",
                         category = "Sosyal",
                         isCompleted = true,
-                        dateString = "Önceki Hafta"
+                        dateString = "Örnek Hafta"
                     ),
                     DailyTaskEntity(
                         checkInId = checkInId,
                         title = "Yemek yerken ekranı kapat.",
                         category = "Dijital Detoks",
                         isCompleted = true,
-                        dateString = "Önceki Hafta"
+                        dateString = "Örnek Hafta"
                     )
                 )
                 dao.insertTasks(tasks)
             }
+
+            // Also seed demo active weekly plan so user can test the weekly program immediately
+            val cal = Calendar.getInstance()
+            val startMs = cal.timeInMillis
+            cal.add(Calendar.DAY_OF_YEAR, 7)
+            val endMs = cal.timeInMillis
+
+            val demoPlan = WeeklyPlanEntity(
+                weekString = getCurrentWeekString(),
+                startDate = startMs,
+                endDate = endMs,
+                mainGoal = "Bu hafta sevdiklerinle daha derin ve anlamlı bağlar inşa et.",
+                focusArea = "Sosyal Bağlar & İletişim",
+                status = "ACTIVE",
+                isDemo = true
+            )
+            val demoPlanId = dao.insertWeeklyPlan(demoPlan)
+
+            val demoWeeklyTasks = listOf(
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 1,
+                    dayLabel = "1. Gün - Pazartesi",
+                    title = "Günün hissini tek bir cümleye dök.",
+                    description = "Günün sonunda seni en çok düşündüren duyguyu not alarak farkındalık oluştur.",
+                    category = "İlk Adım",
+                    isCompleted = true
+                ),
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 2,
+                    dayLabel = "2. Gün - Salı",
+                    title = "Eski bir dosta kısa bir mesaj at.",
+                    description = "Sadece 'Nasılsın, aklıma geldin' demek bile aranızdaki bağı canlandırır.",
+                    category = "Sosyal",
+                    isCompleted = true
+                ),
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 3,
+                    dayLabel = "3. Gün - Çarşamba",
+                    title = "Akşam yemeğinde telefonu masadan uzak tut.",
+                    description = "Yemek yerken ekran yerine anın tadına ve çevrendekilere odaklan.",
+                    category = "Dijital Detoks",
+                    isCompleted = false
+                ),
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 4,
+                    dayLabel = "4. Gün - Perşembe",
+                    title = "Günün içinde birine içten teşekkür et.",
+                    description = "Çalışma arkadaşına, ailene veya bir esnafa samimi bir tebessümle teşekkür et.",
+                    category = "Sosyal",
+                    isCompleted = false
+                ),
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 5,
+                    dayLabel = "5. Gün - Cuma",
+                    title = "İlgi duyduğun bir konuyu biriyle paylaş.",
+                    description = "Okuduğun bir yazıyı ya da sevdiğin bir müziği bir yakınına öner.",
+                    category = "Aktivite",
+                    isCompleted = false
+                ),
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 6,
+                    dayLabel = "6. Gün - Cumartesi",
+                    title = "Açık havada ekransız 20 dakika geçir.",
+                    description = "Sakin bir parkta yürüyerek etraftaki sesleri ve ortamı fark et.",
+                    category = "Aktivite",
+                    isCompleted = false
+                ),
+                WeeklyTaskEntity(
+                    planId = demoPlanId,
+                    dayNumber = 7,
+                    dayLabel = "7. Gün - Pazar",
+                    title = "Haftalık değerlendirmeni tamamla.",
+                    description = "Bu hafta sana nelerin iyi geldiğini 5 adımlı rehberle gözden geçir.",
+                    category = "İlk Adım",
+                    isCompleted = false
+                )
+            )
+            dao.insertWeeklyTasks(demoWeeklyTasks)
         }
     }
 
@@ -208,30 +456,39 @@ class CompassRepository(
         }
     }
 
-    fun calculateCorrelation(checkIns: List<CheckInEntity>): Float {
-        if (checkIns.size < 2) return 0f
+    fun calculateCorrelation(checkIns: List<CheckInEntity>): Float? = Companion.calculateCorrelation(checkIns)
 
-        val n = checkIns.size.toFloat()
-        val x = checkIns.map { it.screenHours }
-        val y = checkIns.map { it.score.toFloat() }
+    companion object {
+        /**
+         * Calculates Pearson correlation between screen hours and loneliness score.
+         * Strictly requires n >= 5 data points for statistical validity.
+         * Returns null if n < 5.
+         */
+        fun calculateCorrelation(checkIns: List<CheckInEntity>): Float? {
+            if (checkIns.size < 5) return null
 
-        val sumX = x.sum()
-        val sumY = y.sum()
+            val n = checkIns.size.toFloat()
+            val x = checkIns.map { it.screenHours }
+            val y = checkIns.map { it.score.toFloat() }
 
-        val sumXSquare = x.sumOf { (it * it).toDouble() }.toFloat()
-        val sumYSquare = y.sumOf { (it * it).toDouble() }.toFloat()
+            val sumX = x.sum()
+            val sumY = y.sum()
 
-        var sumXY = 0f
-        for (i in checkIns.indices) {
-            sumXY += x[i] * y[i]
+            val sumXSquare = x.sumOf { (it * it).toDouble() }.toFloat()
+            val sumYSquare = y.sumOf { (it * it).toDouble() }.toFloat()
+
+            var sumXY = 0f
+            for (i in checkIns.indices) {
+                sumXY += x[i] * y[i]
+            }
+
+            val numerator = (n * sumXY) - (sumX * sumY)
+            val denominatorPart1 = (n * sumXSquare) - (sumX * sumX)
+            val denominatorPart2 = (n * sumYSquare) - (sumY * sumY)
+
+            val denominator = sqrt(denominatorPart1 * denominatorPart2)
+
+            return if (denominator == 0f) 0f else (numerator / denominator).coerceIn(-1f, 1f)
         }
-
-        val numerator = (n * sumXY) - (sumX * sumY)
-        val denominatorPart1 = (n * sumXSquare) - (sumX * sumX)
-        val denominatorPart2 = (n * sumYSquare) - (sumY * sumY)
-
-        val denominator = sqrt(denominatorPart1 * denominatorPart2)
-
-        return if (denominator == 0f) 0f else (numerator / denominator).coerceIn(-1f, 1f)
     }
 }

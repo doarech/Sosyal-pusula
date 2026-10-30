@@ -6,8 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [CheckInEntity::class, DailyTaskEntity::class],
-    version = 3,
+    entities = [
+        CheckInEntity::class,
+        DailyTaskEntity::class,
+        WeeklyPlanEntity::class,
+        WeeklyTaskEntity::class,
+        WeeklyReviewEntity::class
+    ],
+    version = 4,
     exportSchema = false
 )
 abstract class CompassDatabase : RoomDatabase() {

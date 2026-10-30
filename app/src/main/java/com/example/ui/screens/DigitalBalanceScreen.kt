@@ -231,7 +231,7 @@ fun DigitalBalanceScreen(
 
                     if (correlation == null) {
                         Text(
-                            text = "Korelasyon analizi için en az 3 haftalık ölçüm kaydı gereklidir. Değerlendirmelerini yaptıkça ilişkinin gücü burada somutlaşacak.",
+                            text = "İstatistiksel olarak güvenilir bir Pearson korelasyon analizi için en az 5 haftalık ölçüm kaydı gereklidir (Şu an: ${allCheckIns.size}/5 hafta). Değerlendirmelerini düzenli yaptıkça ekran süresi ile sosyal durumun arasındaki matematiksel eğilim burada hesaplanacaktır.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 20.sp
@@ -244,7 +244,7 @@ fun DigitalBalanceScreen(
                             absCorr >= 0.3f -> "Orta"
                             else -> "Zayıf"
                         }
-                        val relationshipLabel = if (isPositive) "Pozitif (Ekran arttıkça yalnızlık artıyor)" else "Ters İlişki"
+                        val relationshipLabel = if (isPositive) "Pozitif (Ekran arttıkça yalnızlık puanı artıyor)" else "Ters İlişki"
                         val tagColor = if (isPositive) Color(0xFFEF4444) else Color(0xFF10B981)
 
                         Surface(
@@ -263,9 +263,9 @@ fun DigitalBalanceScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         val explanation = if (isPositive) {
-                            "Haftalık telefon ekran süren uzadıkça, yalnızlık puanında da artış gözlemleniyor. Ekran süresini 1 saat dahi azaltmak gerçek hayattaki sosyal tatmini hissedilir şekilde yükseltebilir."
+                            "Haftalık telefon ekran süren uzadıkça, yalnızlık puanında da artış eğilimi gözlemleniyor. Ekran süresini 1 saat dahi azaltmak gerçek hayattaki sosyal tatmini hissedilir şekilde yükseltebilir."
                         } else {
-                            "Ekran süren ile yalnızlık hissin arasında doğrudan bir artış ilişkisi görünmüyor. Yine de bilinçli kullanımını sürdürmen zihinsel ferahlığını koruyacaktır."
+                            "Ekran süren ile yalnızlık hissin arasında doğrudan bir artış eğilimi görünmüyor. Yine de bilinçli kullanımını sürdürmen zihinsel ferahlığını koruyacaktır."
                         }
 
                         Text(
@@ -304,6 +304,22 @@ fun DigitalBalanceScreen(
                                 .clip(RoundedCornerShape(50)),
                             color = tagColor,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "💡 Önemli Bilgi: Korelasyon nedensellik (sebep-sonuç) anlamına gelmez; yalnızca iki değişken arasındaki doğrusal ilişki eğilimini gösterir.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(10.dp),
+                            lineHeight = 16.sp
                         )
                     }
                 }

@@ -20,7 +20,7 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify Room database initialization at version 3`() {
+  fun `verify Room database initialization at version 4`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val db = com.example.data.local.CompassDatabase.getInstance(context)
     val dao = db.compassDao()

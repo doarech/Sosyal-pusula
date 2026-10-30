@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,18 +65,23 @@ import com.example.ui.theme.getScoreColor
 
 import androidx.compose.material.icons.filled.Settings
 
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
+
 @Composable
 fun HomeScreen(
     viewModel: CompassViewModel,
     onStartCheckIn: () -> Unit,
     onViewResult: () -> Unit,
     onOpenSettings: () -> Unit,
+    onNavigateToWeeklyPlan: () -> Unit = {},
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
     val latestCheckIn by viewModel.latestCheckIn.collectAsState()
     val allCheckIns by viewModel.allCheckIns.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
+    val activePlan by viewModel.activeWeeklyPlan.collectAsState()
     val showMotivationCard by viewModel.showMotivationCard.collectAsState()
 
     var selectedTaskCategory by remember { mutableStateOf("Hepsi") }
@@ -183,12 +189,31 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Haftalık Yalnızlık Durumu",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Haftalık Yalnızlık Durumu",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (entry.isDemo) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                        shape = RoundedCornerShape(50)
+                                    ) {
+                                        Text(
+                                            text = "Örnek Veri",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
 
                             Surface(
                                 color = getScoreColor(entry.score).copy(alpha = 0.15f),
@@ -381,6 +406,88 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Weekly Personal Development Program Banner Card
+        item {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToWeeklyPlan() }
+                    .testTag("home_weekly_plan_card")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.DateRange,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Haftalık Gelişim Programı",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                activePlan?.let { p ->
+                                    if (p.isDemo) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                            shape = RoundedCornerShape(50)
+                                        ) {
+                                            Text(
+                                                text = "Demo",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = activePlan?.mainGoal ?: "7 günlük mikro-eylemler ve haftalık değerlendirme rehberi",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Aç",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

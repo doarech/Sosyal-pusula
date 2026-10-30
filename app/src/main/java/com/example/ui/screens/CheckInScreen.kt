@@ -626,26 +626,27 @@ fun CheckInScreen(
 
                 Button(
                     onClick = {
-                        val formattedAnswers = dynamicQuestions.map { q ->
+                        val structuredResponses = dynamicQuestions.map { q ->
                             val mode = questionModes[q.id] ?: QuestionAnswerMode.OPTIONS
-                            val selected = userAnswers[q.id].orEmpty()
+                            val selected = userAnswers[q.id].orEmpty().trim()
                             val custom = userCustomNotes[q.id]?.trim().orEmpty()
-                            val combined = when {
-                                mode == QuestionAnswerMode.WRITING && custom.isNotBlank() ->
-                                    "Kullanıcı Kendi Cevabı: $custom"
-                                selected.isNotBlank() && custom.isNotBlank() ->
-                                    "$selected (Kullanıcı Notu: $custom)"
-                                custom.isNotBlank() ->
-                                    "Kullanıcı Kendi Cevabı: $custom"
-                                selected.isNotBlank() ->
-                                    selected
-                                else ->
-                                    q.options.getOrElse(2) { "Kısmen" }
+
+                            val (optionIdx, answerText) = if (mode == QuestionAnswerMode.WRITING) {
+                                null to (custom.ifBlank { "Belirtilmedi" })
+                            } else {
+                                val idx = q.options.indexOf(selected).takeIf { it in 0..4 }
+                                idx to (selected.ifBlank { "Cevaplanmadı" })
                             }
-                            Pair(q.text, combined)
+
+                            com.example.data.ai.QuestionResponse(
+                                question = q,
+                                selectedOptionIndex = optionIdx,
+                                answerText = answerText,
+                                customNote = custom
+                            )
                         }
-                        viewModel.submitCheckIn(
-                            answers = formattedAnswers,
+                        viewModel.submitCheckInWithResponses(
+                            responses = structuredResponses,
                             userNotes = userFeelingNote,
                             onSuccess = { onFinished() }
                         )

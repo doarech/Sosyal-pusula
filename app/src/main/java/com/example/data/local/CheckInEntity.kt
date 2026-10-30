@@ -14,5 +14,6 @@ data class CheckInEntity(
     val aiSummary: String,       // Empathetic personal summary
     val levelLabel: String,      // "Düşük Yalnızlık", "Orta Seviye", "Yüksek Yalnızlık", "Şiddetli Yalnızlık"
     val motivationQuote: String, // Daily inspirational quote
-    val motivationAuthor: String = "" // Real author of the quote
+    val motivationAuthor: String = "", // Real author of the quote
+    val isDemo: Boolean = false // Distinguishes sample/test data from genuine user entries
 )

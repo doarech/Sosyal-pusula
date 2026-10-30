@@ -76,6 +76,15 @@ fun DualChart(
                     color = onSurfaceVariant
                 )
             }
+
+            if (checkIns.any { it.isDemo }) {
+                Text(
+                    text = "• (Demo veriler dahil)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 10.sp
+                )
+            }
         }
 
         // Custom Canvas Chart

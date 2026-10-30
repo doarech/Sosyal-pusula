@@ -42,6 +42,12 @@ import com.example.ui.screens.StatsScreen
 import com.example.ui.theme.SosyalPusulaTheme
 import com.example.util.configureAppCheck
 
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.outlined.DateRange
+import com.example.ui.screens.WeeklyPlanScreen
+import com.example.ui.screens.WeeklyReviewScreen
+import com.example.ui.screens.WeeklyReviewResultScreen
+
 class MainActivity : ComponentActivity() {
 
     private val viewModel: CompassViewModel by viewModels()
@@ -75,10 +81,11 @@ fun MainAppScaffold(
     isDarkTheme: Boolean
 ) {
     var currentScreen by remember { mutableStateOf("home") }
+    var activeReviewPlanId by remember { mutableStateOf(0L) }
 
-    val showBottomBar = currentScreen == "home" || currentScreen == "stats"
+    val showBottomBar = currentScreen == "home" || currentScreen == "weekly_plan" || currentScreen == "stats"
 
-    if (currentScreen == "stats") {
+    if (currentScreen == "stats" || currentScreen == "weekly_plan") {
         BackHandler { currentScreen = "home" }
     }
 
@@ -102,6 +109,20 @@ fun MainAppScaffold(
                         label = { Text("Ana Sayfa") },
                         alwaysShowLabel = true,
                         modifier = Modifier.testTag("nav_home_button")
+                    )
+
+                    NavigationBarItem(
+                        selected = currentScreen == "weekly_plan",
+                        onClick = { currentScreen = "weekly_plan" },
+                        icon = {
+                            Icon(
+                                imageVector = if (currentScreen == "weekly_plan") Icons.Filled.DateRange else Icons.Outlined.DateRange,
+                                contentDescription = "Haftalık Plan"
+                            )
+                        },
+                        label = { Text("Haftalık Plan") },
+                        alwaysShowLabel = true,
+                        modifier = Modifier.testTag("nav_weekly_plan_button")
                     )
 
                     NavigationBarItem(
@@ -130,12 +151,35 @@ fun MainAppScaffold(
                 "home" -> HomeScreen(
                     viewModel = viewModel,
                     onStartCheckIn = {
-                        viewModel.loadDynamicQuestions()
+                        // Managed singularly inside CheckInScreen
                         currentScreen = "checkin"
                     },
                     onViewResult = { currentScreen = "result" },
                     onOpenSettings = { currentScreen = "settings" },
+                    onNavigateToWeeklyPlan = { currentScreen = "weekly_plan" },
                     isDarkTheme = isDarkTheme
+                )
+
+                "weekly_plan" -> WeeklyPlanScreen(
+                    viewModel = viewModel,
+                    onBack = { currentScreen = "home" },
+                    onStartReview = { planId ->
+                        activeReviewPlanId = planId
+                        currentScreen = "weekly_review"
+                    }
+                )
+
+                "weekly_review" -> WeeklyReviewScreen(
+                    planId = activeReviewPlanId,
+                    viewModel = viewModel,
+                    onBack = { currentScreen = "weekly_plan" },
+                    onFinished = { currentScreen = "weekly_review_result" }
+                )
+
+                "weekly_review_result" -> WeeklyReviewResultScreen(
+                    viewModel = viewModel,
+                    onViewNewPlan = { currentScreen = "weekly_plan" },
+                    onGoHome = { currentScreen = "home" }
                 )
 
                 "stats" -> StatsScreen(

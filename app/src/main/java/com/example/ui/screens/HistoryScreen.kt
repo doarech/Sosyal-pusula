@@ -35,6 +35,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -92,26 +93,68 @@ fun HistoryScreen(
     ) {
         // Top App Bar
         item {
+            var showDeleteDemoDialog by remember { mutableStateOf(false) }
+            val hasDemoData = allCheckIns.any { it.isDemo }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.testTag("history_back_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Geri",
-                        tint = MaterialTheme.colorScheme.onBackground
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag("history_back_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Geri",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Ölçüm Geçmişi",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Ölçüm ve Görev Geçmişi",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
+
+                if (hasDemoData) {
+                    OutlinedButton(
+                        onClick = { showDeleteDemoDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.testTag("delete_demo_history_button")
+                    ) {
+                        Text("Demo Verileri Sil", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            if (showDeleteDemoDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDemoDialog = false },
+                    title = { Text("Örnek (Demo) Verileri Sil?") },
+                    text = {
+                        Text("Uygulamanın başlangıcında eklenen tüm örnek ölçümler ve demo görevler silinecektir. Kendi gerçek ölçümleriniz korunur.")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteDemoData()
+                                showDeleteDemoDialog = false
+                            }
+                        ) {
+                            Text("Sil", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteDemoDialog = false }) {
+                            Text("Vazgeç")
+                        }
+                    }
                 )
             }
         }
@@ -267,12 +310,31 @@ fun HistoryScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "${viewModel.formatWeekLabel(checkIn.weekString)} Haftası",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${viewModel.formatWeekLabel(checkIn.weekString)} Haftası",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (checkIn.isDemo) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                            shape = RoundedCornerShape(50)
+                                        ) {
+                                            Text(
+                                                text = "Örnek Veri",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,

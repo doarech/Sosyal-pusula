@@ -450,19 +450,31 @@ fun StatsScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            text = viewModel.formatWeekLabel(entry.weekString),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.weight(1.2f)
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1.3f)
+                                        ) {
+                                            Text(
+                                                text = viewModel.formatWeekLabel(entry.weekString),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (entry.isDemo) {
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                Text(
+                                                    text = "(Demo)",
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.outline
+                                                )
+                                            }
+                                        }
                                         Text(
                                             text = "${entry.score}",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.Bold,
                                             color = scoreColor,
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier.weight(0.9f)
                                         )
                                         Text(
                                             text = "%.1f sa".format(entry.screenHours),

@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.History
@@ -43,6 +44,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -242,11 +246,92 @@ fun SettingsScreen(
                             }
                         }
 
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Aç",
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(20.dp)
+                    }
+                }
+            }
+
+            // Demo Data Management Card
+            item {
+                val allCheckIns by viewModel.allCheckIns.collectAsState()
+                val hasDemoData = allCheckIns.any { it.isDemo }
+                var showDeleteDemoDialog by remember { mutableStateOf(false) }
+
+                if (hasDemoData) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showDeleteDemoDialog = true }
+                            .testTag("settings_delete_demo_card")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        text = "Örnek (Demo) Verileri Temizle",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Başlangıçta eklenen test ölçümlerini siler, gerçek verilerin kalır",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (showDeleteDemoDialog) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showDeleteDemoDialog = false },
+                            title = { Text("Demo Verileri Temizlensin mi?") },
+                            text = {
+                                Text("Uygulama açılışında örnek amaçlı yüklenen 4 haftalık demo ölçümleri ve görevleri kalıcı olarak siler. Kendi yaptığınız ölçümler asla silinmez.")
+                            },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        viewModel.deleteDemoData()
+                                        showDeleteDemoDialog = false
+                                    }
+                                ) {
+                                    Text("Sil", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            dismissButton = {
+                                androidx.compose.material3.TextButton(onClick = { showDeleteDemoDialog = false }) {
+                                    Text("Vazgeç")
+                                }
+                            }
                         )
                     }
                 }
