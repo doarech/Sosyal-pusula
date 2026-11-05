@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,14 +58,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.CompassViewModel
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.mutableIntStateOf
+import com.example.ui.components.WeeklyTaskCard
 import com.example.ui.components.LonelinessScaleBar
 import com.example.ui.components.ScoreRing
-import com.example.ui.components.TaskItemCard
 import com.example.ui.theme.ScreenTimeColor
 import com.example.ui.theme.getScoreColor
 
 import androidx.compose.material.icons.filled.Settings
-
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
 
@@ -80,35 +86,20 @@ fun HomeScreen(
 ) {
     val latestCheckIn by viewModel.latestCheckIn.collectAsState()
     val allCheckIns by viewModel.allCheckIns.collectAsState()
-    val allTasks by viewModel.allTasks.collectAsState()
     val activePlan by viewModel.activeWeeklyPlan.collectAsState()
     val showMotivationCard by viewModel.showMotivationCard.collectAsState()
 
-    var selectedTaskCategory by remember { mutableStateOf("Hepsi") }
+    val currentDayNum = viewModel.currentDayNumber
+    var selectedDay by remember(currentDayNum) { mutableIntStateOf(currentDayNum) }
 
-    val filteredTasks = remember(allTasks, selectedTaskCategory) {
-        val currentTasks = if (latestCheckIn != null) {
-            allTasks.filter { it.checkInId == latestCheckIn!!.id }
-        } else {
-            allTasks.take(4)
-        }
-
-        if (selectedTaskCategory == "Hepsi") currentTasks
-        else currentTasks.filter { it.category.contains(selectedTaskCategory, ignoreCase = true) }
+    val tasksFlow = remember(activePlan) {
+        activePlan?.let { viewModel.getWeeklyTasks(it.id) } ?: kotlinx.coroutines.flow.flowOf(emptyList())
     }
+    val weeklyTasks by tasksFlow.collectAsState(initial = emptyList())
 
-    val completedCount = filteredTasks.count { it.isCompleted }
-    val totalCount = filteredTasks.size
-
-    val avgScore = remember(allCheckIns) {
-        if (allCheckIns.isEmpty()) 0
-        else (allCheckIns.map { it.score }.average()).toInt()
-    }
-
-    val avgScreen = remember(allCheckIns) {
-        if (allCheckIns.isEmpty()) 0f
-        else (allCheckIns.map { it.screenHours }.average()).toFloat()
-    }
+    val completedCount = weeklyTasks.count { it.isCompleted }
+    val totalCount = weeklyTasks.size
+    val completionRatio = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
 
     LazyColumn(
         modifier = modifier
@@ -199,20 +190,6 @@ fun HomeScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (entry.isDemo) {
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                        shape = RoundedCornerShape(50)
-                                    ) {
-                                        Text(
-                                            text = "Örnek Veri",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
                             }
 
                             Surface(
@@ -410,151 +387,353 @@ fun HomeScreen(
             }
         }
 
-        // Weekly Personal Development Program Banner Card
+        // 1. Haftalık Gelişim Programı & İlerleme Kartı
         item {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToWeeklyPlan() }
-                    .testTag("home_weekly_plan_card")
-            ) {
-                Row(
+            activePlan?.let { plan ->
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .clickable { onNavigateToWeeklyPlan() }
+                        .testTag("home_weekly_plan_card")
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape,
-                            modifier = Modifier.size(40.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Filled.DateRange,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Haftalık Gelişim Programı",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                activePlan?.let { p ->
-                                    if (p.isDemo) {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                            shape = RoundedCornerShape(50)
-                                        ) {
-                                            Text(
-                                                text = "Demo",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.DateRange,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
+                                Column {
+                                    Text(
+                                        text = "Haftalık Gelişim Programı",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = plan.focusArea,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Tüm Hafta",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Aç",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = plan.mainGoal,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Weekly Progress Indicator
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = activePlan?.mainGoal ?: "7 günlük mikro-eylemler ve haftalık değerlendirme rehberi",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
+                                text = "Haftalık İlerleme",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$completedCount / $totalCount Tamamlandı (%${(completionRatio * 100).toInt()})",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        LinearProgressIndicator(
+                            progress = { completionRatio },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(50)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Aç",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                }
+            } ?: run {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.DateRange,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Haftalık Programın Henüz Başlamadı",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Yalnızlık değerlendirmeni tamamlayarak sana özel 7 günlük adım adım eylem planını hemen oluşturabilirsin.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onStartCheckIn,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Ölçümü Başlat")
+                        }
+                    }
                 }
             }
         }
 
-        // Daily AI Tasks Header and Filter Chips
+        // 2. Günün Eylem Görevi Header & Day Selector (Tek ve Bütünleşik Görev Sistemi)
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Kişisel Eylem Görevleri",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    if (totalCount > 0) {
+                    Column {
                         Text(
-                            text = "$completedCount / $totalCount Tamamlandı",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
+                            text = "Günün Eylem Görevi",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
+                        Text(
+                            text = "Haftalık programından seçilen güne ait mikro-adım",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (activePlan != null) {
+                        TextButton(
+                            onClick = onNavigateToWeeklyPlan,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("Tüm 7 Gün", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Hepsi", "Sosyal", "Dijital Detoks", "Aktivite").forEach { cat ->
-                        FilterChip(
-                            selected = selectedTaskCategory == cat,
-                            onClick = { selectedTaskCategory = cat },
-                            label = { Text(cat, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        )
+                // Horizontal 7-Day Selector Bar
+                val dayNames = listOf("Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    (1..7).forEach { day ->
+                        val isSelected = selectedDay == day
+                        val isToday = currentDayNum == day
+                        val dayTask = weeklyTasks.find { it.dayNumber == day }
+                        val isTaskCompleted = dayTask?.isCompleted == true
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = if (isToday && !isSelected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 2.dp)
+                                .clickable { selectedDay = day }
+                                .testTag("day_selector_$day")
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = dayNames[day - 1],
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else if (isToday) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                if (isTaskCompleted) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = "Tamamlandı",
+                                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color(0xFF059669),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = "$day",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                                        else MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Task Items List
-        if (filteredTasks.isEmpty()) {
-            item {
+        // 3. Selected Day's Task Card
+        item {
+            val selectedTask = weeklyTasks.find { it.dayNumber == selectedDay }
+            if (selectedTask != null) {
+                WeeklyTaskCard(
+                    task = selectedTask,
+                    onToggle = { isChecked -> viewModel.toggleWeeklyTask(selectedTask.id, isChecked) },
+                    onSaveReflection = { reflection -> viewModel.saveWeeklyTaskReflection(selectedTask.id, reflection) },
+                    isToday = (selectedDay == currentDayNum),
+                    showDayBadge = true
+                )
+            } else if (weeklyTasks.isNotEmpty()) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Henüz bu kategoride görev bulunmuyor. Yeni bir değerlendirme yaparak taze görevler alabilirsin.",
+                        text = "Bu gün için tanımlı bir görev bulunmuyor.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp)
                     )
                 }
             }
-        } else {
-            items(filteredTasks, key = { it.id }) { task ->
-                TaskItemCard(
-                    task = task,
-                    onToggle = { isChecked -> viewModel.toggleTask(task.id, isChecked) },
-                    onSaveReflection = { reflection -> viewModel.saveTaskReflection(task.id, reflection) }
-                )
+        }
+
+        // 4. Weekly Review Action Banner
+        activePlan?.let { plan ->
+            if (selectedDay == 7 || completedCount >= 5) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToWeeklyPlan() }
+                            .testTag("home_weekly_review_prompt")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.RateReview,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Column {
+                                    Text(
+                                        text = "Haftalık Değerlendirme Vakti",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    Text(
+                                        text = "Bu haftanın ilerlemesini değerlendir ve yeni haftanın kişisel programını oluştur.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 

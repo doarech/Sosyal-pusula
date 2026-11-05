@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -40,7 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.CompassViewModel
 import com.example.ui.components.ScoreRing
-import com.example.ui.components.TaskItemCard
+import com.example.ui.components.WeeklyTaskCard
 import com.example.ui.theme.ScreenTimeColor
 import com.example.ui.theme.getScoreColor
 
@@ -54,13 +55,14 @@ fun ResultDetailScreen(
 
     val recentResult by viewModel.recentAnalysisResult.collectAsState()
     val latestCheckIn by viewModel.latestCheckIn.collectAsState()
-    val allTasks by viewModel.allTasks.collectAsState()
+    val activePlan by viewModel.activeWeeklyPlan.collectAsState()
 
     val currentCheckIn = recentResult ?: latestCheckIn
 
-    val relevantTasks = currentCheckIn?.let { entry ->
-        allTasks.filter { it.checkInId == entry.id }
-    } ?: emptyList()
+    val planTasksFlow = remember(activePlan) {
+        activePlan?.let { viewModel.getWeeklyTasks(it.id) } ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }
+    val relevantTasks by planTasksFlow.collectAsState(initial = emptyList())
 
     Column(
         modifier = modifier
@@ -261,7 +263,7 @@ fun ResultDetailScreen(
             if (relevantTasks.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Sana Özel Belirlenen Günlük Görevler",
+                        text = "Sana Özel 7 Günlük Kişisel Gelişim Programı",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground,
@@ -270,10 +272,12 @@ fun ResultDetailScreen(
                 }
 
                 items(relevantTasks, key = { it.id }) { task ->
-                    TaskItemCard(
+                    WeeklyTaskCard(
                         task = task,
-                        onToggle = { isChecked -> viewModel.toggleTask(task.id, isChecked) },
-                        onSaveReflection = { reflection -> viewModel.saveTaskReflection(task.id, reflection) }
+                        onToggle = { isChecked -> viewModel.toggleWeeklyTask(task.id, isChecked) },
+                        onSaveReflection = { reflection -> viewModel.saveWeeklyTaskReflection(task.id, reflection) },
+                        isToday = (task.dayNumber == viewModel.currentDayNumber),
+                        showDayBadge = true
                     )
                 }
             }

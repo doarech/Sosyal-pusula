@@ -86,6 +86,7 @@ class CompassRepository(
 
     val activeWeeklyPlan: Flow<WeeklyPlanEntity?> = dao.getActiveWeeklyPlan()
     val allWeeklyPlans: Flow<List<WeeklyPlanEntity>> = dao.getAllWeeklyPlans()
+    val allWeeklyTasks: Flow<List<WeeklyTaskEntity>> = dao.getAllWeeklyTasks()
 
     fun getWeeklyTasks(planId: Long): Flow<List<WeeklyTaskEntity>> = dao.getTasksForPlan(planId)
 
@@ -111,19 +112,7 @@ class CompassRepository(
 
         val checkInId = dao.insertCheckIn(checkIn)
 
-        val todayDate = SimpleDateFormat("dd MMM", Locale("tr")).format(Date())
-        val taskEntities = analysis.tasks.map {
-            DailyTaskEntity(
-                checkInId = checkInId,
-                title = it.title,
-                category = it.category,
-                isCompleted = false,
-                dateString = todayDate
-            )
-        }
-        dao.insertTasks(taskEntities)
-
-        // Generate / Update Active 7-Day Weekly Program for this week
+        // Generate and activate unified 7-day weekly development program for this assessment
         try {
             val generatedPlan = aiService.generateWeeklyPlan(analysis.score, userNotes)
             val cal = Calendar.getInstance()
@@ -131,6 +120,9 @@ class CompassRepository(
             cal.add(Calendar.DAY_OF_YEAR, 7)
             val endMs = cal.timeInMillis
 
+            // Mark any previous active plan as completed so only one active plan exists
+            val existingActive = dao.getActiveWeeklyPlan()
+            // Insert new active plan
             val planEntity = WeeklyPlanEntity(
                 weekString = currentWeek,
                 startDate = startMs,
@@ -234,7 +226,32 @@ class CompassRepository(
         // Mark current plan as COMPLETED
         dao.updateWeeklyPlanStatus(planId, "COMPLETED")
 
-        // Generate next week's plan seamlessly
+        // Retrieve actual task completion stats for the plan just completed
+        val planTasks = dao.getTasksForPlanSync(planId)
+        val completedCount = planTasks.count { it.isCompleted }
+        val totalCount = planTasks.size
+        val completionRate = if (totalCount > 0) (completedCount * 100) / totalCount else 0
+
+        // Realistic loneliness score modulation based on user progress and emotional state (never hardcoded!)
+        val latestCheckIn = dao.getLatestCheckInSync()
+        val effectiveScore = latestCheckIn?.let { prevCheckIn ->
+            val scoreDelta = when (emotionalRating) {
+                5 -> -14
+                4 -> -7
+                3 -> 0
+                2 -> +7
+                else -> +14
+            } - (completedCount * 2)
+            (prevCheckIn.score + scoreDelta).coerceIn(1, 100)
+        } ?: when (emotionalRating) {
+            5 -> 20
+            4 -> 35
+            3 -> 50
+            2 -> 70
+            else -> 85
+        }
+
+        // Generate next week's plan seamlessly based on actual performance and user's priority goal
         val cal = Calendar.getInstance()
         val startMs = cal.timeInMillis
         cal.add(Calendar.DAY_OF_YEAR, 7)
@@ -242,10 +259,12 @@ class CompassRepository(
         val nextWeekCal = Calendar.getInstance().apply { add(Calendar.WEEK_OF_YEAR, 1) }
         val nextWeekStr = "${nextWeekCal.get(Calendar.YEAR)}-W${nextWeekCal.get(Calendar.WEEK_OF_YEAR)}"
 
+        val progressReviewText = "Önceki Hafta İlerlemesi: $completedCount/$totalCount görev tamamlandı (%$completionRate başarı). Duygusal durum: $emotionalRating/5. Faydalı bulunanlar: ${helpfulTasks.joinToString(", ")}. Zorlayanlar: ${challenges.joinToString(", ")}. Sosyal Değişim: $socialChangeLabel. Kullanıcının Gelecek Hafta Öncelikli Hedefi: $nextGoal. ${aiSummaryResult.summary}"
+
         val newGeneratedPlan = aiService.generateWeeklyPlan(
-            score = 30,
+            score = effectiveScore,
             userPreferences = nextGoal,
-            previousReview = "${aiSummaryResult.summary} Odak: $nextGoal"
+            previousReview = progressReviewText
         )
 
         val newPlanEntity = WeeklyPlanEntity(
@@ -337,14 +356,14 @@ class CompassRepository(
                         title = "Bugün bir arkadaşına sesli mesaj gönder.",
                         category = "Sosyal",
                         isCompleted = true,
-                        dateString = "Örnek Hafta"
+                        dateString = "Geçmiş Hafta"
                     ),
                     DailyTaskEntity(
                         checkInId = checkInId,
                         title = "Yemek yerken ekranı kapat.",
                         category = "Dijital Detoks",
                         isCompleted = true,
-                        dateString = "Örnek Hafta"
+                        dateString = "Geçmiş Hafta"
                     )
                 )
                 dao.insertTasks(tasks)

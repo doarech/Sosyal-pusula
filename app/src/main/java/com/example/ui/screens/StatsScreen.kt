@@ -56,7 +56,7 @@ fun StatsScreen(
     modifier: Modifier = Modifier
 ) {
     val allCheckIns by viewModel.allCheckIns.collectAsState()
-    val allTasks by viewModel.allTasks.collectAsState()
+    val allWeeklyTasks by viewModel.allWeeklyTasks.collectAsState()
 
     val avgScore = remember(allCheckIns) {
         if (allCheckIns.isEmpty()) 0
@@ -73,8 +73,8 @@ fun StatsScreen(
         else allCheckIns.minOf { it.score }
     }
 
-    val totalTasksCount = allTasks.size
-    val completedTasksCount = allTasks.count { it.isCompleted }
+    val totalTasksCount = allWeeklyTasks.size
+    val completedTasksCount = allWeeklyTasks.count { it.isCompleted }
     val taskCompletionRate = if (totalTasksCount > 0) completedTasksCount.toFloat() / totalTasksCount else 0f
 
     val pagerState = rememberPagerState(pageCount = { 2 })
@@ -460,14 +460,6 @@ fun StatsScreen(
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
-                                            if (entry.isDemo) {
-                                                Spacer(modifier = Modifier.width(3.dp))
-                                                Text(
-                                                    text = "(Demo)",
-                                                    fontSize = 9.sp,
-                                                    color = MaterialTheme.colorScheme.outline
-                                                )
-                                            }
                                         }
                                         Text(
                                             text = "${entry.score}",

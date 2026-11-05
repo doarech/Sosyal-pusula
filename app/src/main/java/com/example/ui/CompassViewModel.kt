@@ -33,6 +33,22 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
     val allTasks: StateFlow<List<DailyTaskEntity>>
     val activeWeeklyPlan: StateFlow<com.example.data.local.WeeklyPlanEntity?>
     val allWeeklyPlans: StateFlow<List<com.example.data.local.WeeklyPlanEntity>>
+    val allWeeklyTasks: StateFlow<List<com.example.data.local.WeeklyTaskEntity>>
+
+    val currentDayNumber: Int
+        get() {
+            val cal = java.util.Calendar.getInstance()
+            return when (cal.get(java.util.Calendar.DAY_OF_WEEK)) {
+                java.util.Calendar.MONDAY -> 1
+                java.util.Calendar.TUESDAY -> 2
+                java.util.Calendar.WEDNESDAY -> 3
+                java.util.Calendar.THURSDAY -> 4
+                java.util.Calendar.FRIDAY -> 5
+                java.util.Calendar.SATURDAY -> 6
+                java.util.Calendar.SUNDAY -> 7
+                else -> 1
+            }
+        }
 
     private val _latestReviewResult = MutableStateFlow<com.example.data.local.WeeklyReviewEntity?>(null)
     val latestReviewResult: StateFlow<com.example.data.local.WeeklyReviewEntity?> = _latestReviewResult.asStateFlow()
@@ -113,6 +129,12 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
             emptyList()
         )
 
+        allWeeklyTasks = repository.allWeeklyTasks.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
         viewModelScope.launch {
             try {
                 val demoDeleted = prefs.getBoolean("demo_data_deleted", false)
@@ -154,6 +176,7 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
         nextGoal: String,
         onSuccess: (com.example.data.local.WeeklyReviewEntity) -> Unit
     ) {
+        if (_isAnalyzing.value) return
         viewModelScope.launch {
             _isAnalyzing.value = true
             try {
@@ -247,6 +270,7 @@ class CompassViewModel(application: Application) : AndroidViewModel(application)
         userNotes: String,
         onSuccess: (CheckInEntity) -> Unit
     ) {
+        if (_isAnalyzing.value) return
         viewModelScope.launch {
             _isAnalyzing.value = true
             _analysisError.value = null

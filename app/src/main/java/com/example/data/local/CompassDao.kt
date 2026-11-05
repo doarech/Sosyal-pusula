@@ -73,6 +73,15 @@ interface CompassDao {
     @Query("SELECT * FROM weekly_tasks WHERE planId = :planId ORDER BY dayNumber ASC")
     fun getTasksForPlan(planId: Long): Flow<List<WeeklyTaskEntity>>
 
+    @Query("SELECT * FROM weekly_tasks WHERE planId = :planId ORDER BY dayNumber ASC")
+    suspend fun getTasksForPlanSync(planId: Long): List<WeeklyTaskEntity>
+
+    @Query("SELECT * FROM weekly_tasks ORDER BY id DESC")
+    fun getAllWeeklyTasks(): Flow<List<WeeklyTaskEntity>>
+
+    @Query("SELECT * FROM check_ins ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestCheckInSync(): CheckInEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWeeklyTasks(tasks: List<WeeklyTaskEntity>)
 

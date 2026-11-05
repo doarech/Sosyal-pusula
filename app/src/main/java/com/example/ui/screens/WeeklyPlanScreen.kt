@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.local.WeeklyPlanEntity
 import com.example.data.local.WeeklyTaskEntity
 import com.example.ui.CompassViewModel
+import com.example.ui.components.WeeklyTaskCard
 import com.example.ui.components.getTagColors
 
 @Composable
@@ -176,21 +177,6 @@ fun WeeklyPlanScreen(
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                     )
-                                }
-
-                                if (plan.isDemo) {
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                        shape = RoundedCornerShape(50)
-                                    ) {
-                                        Text(
-                                            text = "Demo Program",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
                                 }
                             }
 
@@ -332,7 +318,9 @@ fun WeeklyPlanScreen(
             WeeklyTaskCard(
                 task = task,
                 onToggle = { isChecked -> viewModel.toggleWeeklyTask(task.id, isChecked) },
-                onSaveReflection = { ref -> viewModel.saveWeeklyTaskReflection(task.id, ref) }
+                onSaveReflection = { ref -> viewModel.saveWeeklyTaskReflection(task.id, ref) },
+                isToday = (task.dayNumber == viewModel.currentDayNumber),
+                showDayBadge = true
             )
         }
 
@@ -402,167 +390,6 @@ fun WeeklyPlanScreen(
 
         item {
             Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-fun WeeklyTaskCard(
-    task: WeeklyTaskEntity,
-    onToggle: (Boolean) -> Unit,
-    onSaveReflection: (String) -> Unit
-) {
-    var isExpanded by remember { mutableStateOf(false) }
-    var reflectionText by remember(task.userReflection) { mutableStateOf(task.userReflection) }
-    val (tagBg, tagText) = getTagColors(task.category)
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (task.isCompleted) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (task.isCompleted) 0.dp else 1.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("weekly_task_${task.id}")
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
-            ) {
-                Checkbox(
-                    checked = task.isCompleted,
-                    onCheckedChange = { onToggle(it) },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = MaterialTheme.colorScheme.primary,
-                        uncheckedColor = MaterialTheme.colorScheme.outline
-                    ),
-                    modifier = Modifier.testTag("weekly_task_check_${task.id}")
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = task.dayLabel,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        Surface(
-                            color = tagBg,
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Text(
-                                text = task.category,
-                                color = tagText,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = task.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (task.isCompleted) {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-
-                    if (task.description.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = task.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 18.sp
-                        )
-                    }
-
-                    if (task.userReflection.isNotBlank() && !isExpanded) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "✍️ Not: ${task.userReflection}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                maxLines = 2
-                            )
-                        }
-                    }
-                }
-
-                IconButton(
-                    onClick = { isExpanded = !isExpanded },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.EditNote,
-                        contentDescription = "Not Yaz",
-                        tint = if (task.userReflection.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = isExpanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = reflectionText,
-                        onValueChange = { reflectionText = it },
-                        placeholder = { Text("Bu eylem sana nasıl hissettirdi? Cümleye dök...", fontSize = 12.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        maxLines = 3
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { isExpanded = false }) {
-                            Text("Kapat")
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Button(
-                            onClick = {
-                                onSaveReflection(reflectionText.trim())
-                                isExpanded = false
-                            },
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Kaydet")
-                        }
-                    }
-                }
-            }
         }
     }
 }

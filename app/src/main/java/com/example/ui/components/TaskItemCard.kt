@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.DailyTaskEntity
+import com.example.data.local.WeeklyTaskEntity
 
 @Composable
 fun TaskItemCard(
@@ -281,6 +282,277 @@ fun getTagColors(category: String): Pair<Color, Color> {
         }
         else -> {
             Color(0xFFE0E7FF) to Color(0xFF3730A3)
+        }
+    }
+}
+
+@Composable
+fun WeeklyTaskCard(
+    task: WeeklyTaskEntity,
+    onToggle: (Boolean) -> Unit,
+    onSaveReflection: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    isToday: Boolean = false,
+    showDayBadge: Boolean = true
+) {
+    val (tagBg, tagText) = getTagColors(task.category)
+    var isExpanded by remember { mutableStateOf(false) }
+    var reflectionInput by remember(task.userReflection) { mutableStateOf(task.userReflection) }
+
+    val cardBg by animateColorAsState(
+        targetValue = if (task.isCompleted) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        } else if (isToday) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        label = "weeklyTaskCardBg"
+    )
+
+    val borderStroke = if (isToday && !task.isCompleted) {
+        androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+    } else null
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        border = borderStroke,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (task.isCompleted) 0.dp else 1.5.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("weekly_task_${task.id}")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                IconButton(
+                    onClick = { onToggle(!task.isCompleted) },
+                    modifier = Modifier
+                        .size(28.dp)
+                        .testTag("weekly_task_check_${task.id}")
+                ) {
+                    Icon(
+                        imageVector = if (task.isCompleted) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                        contentDescription = if (task.isCompleted) "Tamamlandı" else "Tamamlanmadı",
+                        tint = if (task.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onToggle(!task.isCompleted) }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (showDayBadge) {
+                                Text(
+                                    text = task.dayLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            if (isToday) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(50)
+                                ) {
+                                    Text(
+                                        text = "BUGÜN",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                color = tagBg,
+                                shape = RoundedCornerShape(50)
+                            ) {
+                                Text(
+                                    text = task.category,
+                                    color = tagText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+
+                            if (onSaveReflection != null) {
+                                IconButton(
+                                    onClick = { isExpanded = !isExpanded },
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.EditNote,
+                                        contentDescription = "Not Ekle / Cümleye Dök",
+                                        tint = if (task.userReflection.isNotBlank()) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = task.title,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            textDecoration = if (task.isCompleted && task.userReflection.isBlank()) TextDecoration.LineThrough else TextDecoration.None,
+                            color = if (task.isCompleted && task.userReflection.isBlank()) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        ),
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    if (task.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = task.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+
+            // Saved reflection note display
+            if (task.userReflection.isNotBlank() && !isExpanded) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, start = 38.dp)
+                        .clickable { isExpanded = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.EditNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "“${task.userReflection}”",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Düzenle",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+            }
+
+            // Inline expandable input area
+            AnimatedVisibility(visible = isExpanded && onSaveReflection != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, start = 38.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Bu eylem sana nasıl hissettirdi? Cümleye dök:",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    OutlinedTextField(
+                        value = reflectionInput,
+                        onValueChange = { reflectionInput = it },
+                        placeholder = {
+                            Text(
+                                "Duygunu, yaşadığın deneyimi veya taslak mesajını yaz...",
+                                fontSize = 12.sp
+                            )
+                        },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = {
+                                onSaveReflection?.invoke(reflectionInput.trim())
+                                isExpanded = false
+                            }
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { isExpanded = false },
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text("Kapat", fontSize = 12.sp)
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Button(
+                            onClick = {
+                                onSaveReflection?.invoke(reflectionInput.trim())
+                                isExpanded = false
+                            },
+                            modifier = Modifier.height(34.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Kaydet", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }

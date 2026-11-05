@@ -93,68 +93,26 @@ fun HistoryScreen(
     ) {
         // Top App Bar
         item {
-            var showDeleteDemoDialog by remember { mutableStateOf(false) }
-            val hasDemoData = allCheckIns.any { it.isDemo }
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.testTag("history_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Geri",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Ölçüm Geçmişi",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.testTag("history_back_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Geri",
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
-
-                if (hasDemoData) {
-                    OutlinedButton(
-                        onClick = { showDeleteDemoDialog = true },
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.testTag("delete_demo_history_button")
-                    ) {
-                        Text("Demo Verileri Sil", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
-            if (showDeleteDemoDialog) {
-                AlertDialog(
-                    onDismissRequest = { showDeleteDemoDialog = false },
-                    title = { Text("Örnek (Demo) Verileri Sil?") },
-                    text = {
-                        Text("Uygulamanın başlangıcında eklenen tüm örnek ölçümler ve demo görevler silinecektir. Kendi gerçek ölçümleriniz korunur.")
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                viewModel.deleteDemoData()
-                                showDeleteDemoDialog = false
-                            }
-                        ) {
-                            Text("Sil", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showDeleteDemoDialog = false }) {
-                            Text("Vazgeç")
-                        }
-                    }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Ölçüm Geçmişi",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
         }
@@ -320,20 +278,6 @@ fun HistoryScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    if (checkIn.isDemo) {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                            shape = RoundedCornerShape(50)
-                                        ) {
-                                            Text(
-                                                text = "Örnek Veri",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(
